@@ -1,0 +1,115 @@
+from flask import Flask, render_template_string, request, redirect, url_for
+import json
+import os
+
+app = Flask(__name__)
+
+# File path for storing tasks
+TASKS_FILE = "tasks.json"
+
+# Initialize the JSON file if it doesn't exist
+def init_tasks():
+    if not os.path.exists(TASKS_FILE):
+        with open(TASKS_FILE, "w") as f:
+            json.dump([], f)  # Initialize as an empty list
+
+# Function to load tasks from the JSON file
+def load_tasks():
+    with open(TASKS_FILE, "r") as f:
+        tasks = json.load(f)
+    return tasks
+
+# Function to save tasks to the JSON file
+def save_tasks(tasks):
+    with open(TASKS_FILE, "w") as f:
+        json.dump(tasks, f)
+
+# Function to add a new task
+def add_task(task_text):
+    tasks = load_tasks()
+    tasks.append(task_text)
+    save_tasks(tasks)
+
+# Function to delete a task
+def delete_task(task_text):
+    tasks = load_tasks()
+    tasks = [task for task in tasks if task != task_text]
+    save_tasks(tasks)
+
+@app.route("/", methods=["GET", "POST"])
+def todo():
+    if request.method == "POST":
+        task_text = request.form["newTask"]
+        if task_text:
+            add_task(task_text)
+        return redirect(url_for("todo"))
+    
+    tasks = load_tasks()
+    html_content = '''
+    <!DOCTYPE html>
+    <html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>To-Do List</title>
+        <!-- Ionic CSS from CDN -->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@ionic/core/css/ionic.bundle.css" />
+    </head>
+
+    <body>
+        <ion-app>
+            <ion-header>
+                <ion-toolbar>
+                    <ion-title>To-Do List</ion-title>
+                </ion-toolbar>
+            </ion-header>
+
+            <ion-content>
+                <!-- Input for new tasks -->
+                <ion-item>
+                    <form method="POST">
+                        <ion-input id="newTask" name="newTask" placeholder="Enter a new task"></ion-input>
+                        <ion-button type="submit" slot="end" color="primary">Add</ion-button>
+                    </form>
+                </ion-item>
+
+                <!-- Task List -->
+                <ion-list id="taskList">
+                    {% for task in tasks %}
+                        <ion-item>
+                            <ion-label>{{ task }}</ion-label>
+                            <ion-button slot="end" color="danger" onclick="deleteTask('{{ task }}')">Delete</ion-button>
+                        </ion-item>
+                    {% endfor %}
+                </ion-list>
+            </ion-content>
+        </ion-app>
+
+        <!-- Ionic JS from CDN -->
+        <script src="https://cdn.jsdelivr.net/npm/@ionic/core/dist/ionic/ionic.js"></script>
+
+        <script>
+            function deleteTask(taskText) {
+                if (confirm('Are you sure you want to delete this task?')) {
+                    fetch(`/delete?task=${taskText}`, { method: 'POST' })
+                        .then(response => location.reload());
+                }
+            }
+        </script>
+    </body>
+
+    </html>
+    '''
+    return render_template_string(html_content, tasks=tasks)
+
+@app.route("/delete", methods=["POST"])
+def delete():
+    task_text = request.args.get("task")
+    if task_text:
+        delete_task(task_text)
+    return redirect(url_for("todo"))
+
+if __name__ == '__main__':
+    init_tasks()  # Initialize the tasks file
+    app.run(debug=True)
